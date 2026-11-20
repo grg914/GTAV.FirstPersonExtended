@@ -1,0 +1,56 @@
+name: Build GTAV FirstPersonExtended ASI (Windows x64)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-asi.yml'
+      - 'src/**'
+      - 'Makefile'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Compile Windows x64 ASI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install cross-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends make g++-mingw-w64-x86-64 file
+
+      - name: Compile official release target
+        run: make -j2
+
+      - name: Validate Windows x64 DLL and generate hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s build/GTAV.FirstPersonExtended.asi
+          file build/GTAV.FirstPersonExtended.asi
+          file build/GTAV.FirstPersonExtended.asi | grep -E 'PE32\+.*(x86-64|x86_64).*DLL'
+          cd build
+          sha256sum GTAV.FirstPersonExtended.asi > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          printf '%s\n' "${GITHUB_SHA}" > SOURCE_COMMIT.txt
+
+      - name: Upload compiled ASI and checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTAV-FirstPersonExtended-ASI-Windows-x64
+          path: |
+            build/GTAV.FirstPersonExtended.asi
+            build/SHA256SUMS.txt
+            build/SOURCE_COMMIT.txt
+          if-no-files-found: error
+          retention-days: 30
