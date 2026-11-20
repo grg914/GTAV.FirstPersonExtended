@@ -38,7 +38,9 @@ jobs:
           set -euo pipefail
           test -s build/GTAV.FirstPersonExtended.asi
           file build/GTAV.FirstPersonExtended.asi
-          file build/GTAV.FirstPersonExtended.asi | grep -E 'PE32\+.*(x86-64|x86_64).*DLL'
+          file build/GTAV.FirstPersonExtended.asi | grep -F 'PE32+'
+          file build/GTAV.FirstPersonExtended.asi | grep -E 'DLL|dll'
+          file build/GTAV.FirstPersonExtended.asi | grep -E 'x86-64|x86_64'
           cd build
           sha256sum GTAV.FirstPersonExtended.asi > SHA256SUMS.txt
           cat SHA256SUMS.txt
