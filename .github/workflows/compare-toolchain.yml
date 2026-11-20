@@ -1,0 +1,45 @@
+name: Diagnostic - compare MinGW POSIX vs Win32
+
+on:
+  push:
+    paths: ['.github/workflows/compare-toolchain.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install both MinGW thread models
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends make file binutils-mingw-w64-x86-64 g++-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-win32
+      - name: Compile both toolchains from identical sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p comparison
+          for kind in win32 posix; do
+            compiler="x86_64-w64-mingw32-g++-$kind"
+            "$compiler" --version | head -1
+            make clean
+            make -j2 CXX="$compiler"
+            cp build/GTAV.FirstPersonExtended.asi "comparison/GTAV.FirstPersonExtended-$kind.asi"
+            file "comparison/GTAV.FirstPersonExtended-$kind.asi"
+            stat -c "$kind size: %s bytes" "comparison/GTAV.FirstPersonExtended-$kind.asi"
+            sha256sum "comparison/GTAV.FirstPersonExtended-$kind.asi"
+            x86_64-w64-mingw32-objdump -p "comparison/GTAV.FirstPersonExtended-$kind.asi" | grep -A12 'The Export Tables' | grep -E 'Export Address Table|Table' | head -4
+          done
+          sha256sum comparison/*.asi > comparison/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Thread-model-comparison-Windows-x64
+          path: comparison/
+          if-no-files-found: error
+          retention-days: 7
