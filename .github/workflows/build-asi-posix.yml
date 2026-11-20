@@ -1,0 +1,67 @@
+name: Build GTAV FirstPersonExtended ASI (MinGW POSIX)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-asi-posix.yml'
+      - 'src/**'
+      - 'Makefile'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-posix:
+    name: Compile Windows x64 (POSIX threads)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install MinGW-w64 POSIX compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends make file g++-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64
+
+      - name: Verify POSIX threading model
+        shell: bash
+        run: |
+          set -euo pipefail
+          x86_64-w64-mingw32-g++-posix -v 2>&1 | tee compiler-info.txt
+          grep -i 'Thread model: posix' compiler-info.txt
+
+      - name: Compile ASI using POSIX toolchain
+        run: make -j2 CXX=x86_64-w64-mingw32-g++-posix
+
+      - name: Validate Windows x64 DLL and calculate SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s build/GTAV.FirstPersonExtended.asi
+          file build/GTAV.FirstPersonExtended.asi | tee build/BINARY_INFO.txt
+          grep -F 'PE32+' build/BINARY_INFO.txt
+          grep -E 'DLL|dll' build/BINARY_INFO.txt
+          grep -E 'x86-64|x86_64' build/BINARY_INFO.txt
+          ( cd build && sha256sum GTAV.FirstPersonExtended.asi > SHA256SUMS.txt )
+          cp compiler-info.txt build/COMPILER_INFO.txt
+          printf '%s\n' "${GITHUB_SHA}" > build/SOURCE_COMMIT.txt
+          cat build/SHA256SUMS.txt
+
+      - name: Upload POSIX ASI build
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTAV-FirstPersonExtended-ASI-POSIX-x64
+          path: |
+            build/GTAV.FirstPersonExtended.asi
+            build/SHA256SUMS.txt
+            build/SOURCE_COMMIT.txt
+            build/BINARY_INFO.txt
+            build/COMPILER_INFO.txt
+          if-no-files-found: error
+          retention-days: 30
